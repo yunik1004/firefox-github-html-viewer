@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub HTML Preview",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Adds a Preview button to GitHub HTML blob pages that opens the rendered file in a new tab.",
   "browser_specific_settings": {
     "gecko": {
