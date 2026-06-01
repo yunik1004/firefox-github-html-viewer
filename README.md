@@ -1,6 +1,6 @@
 # GitHub HTML Preview (Firefox)
 
-A Firefox extension that adds a **Preview** button next to `Code | Blame` on GitHub blob pages for HTML files. Clicking it toggles the code view to an inline rendered view in the same spot.
+A Firefox extension that adds a **Preview** link to the file header action row on GitHub HTML blob pages — sitting just to the left of the "Add to space" button. Clicking it opens the rendered HTML in a new tab.
 
 Target pages: `https://github.com/{owner}/{repo}/blob/{branch}/.../*.html` (and `.htm`).
 
@@ -31,7 +31,7 @@ npm run build        # rebuild + produce dist/*.zip (== .xpi)
 npm run ci           # typecheck + lint + build (parity with CI)
 ```
 
-TypeScript source lives in `src/`, static assets (`manifest.json`, `content.css`, `icons/`) in `public/`. `npm run prepare-build` (chained from `start`/`lint`/`build`/`sign`) does:
+TypeScript source lives in `src/`, static assets (`manifest.json`, `icons/`) in `public/`. `npm run prepare-build` (chained from `start`/`lint`/`build`/`sign`) does:
 1. `rm -rf build dist`
 2. `tsc` — compiles `src/*.ts` to `build/`
 3. Copies the contents of `public/` to `build/`
@@ -49,7 +49,7 @@ TypeScript source lives in `src/`, static assets (`manifest.json`, `content.css`
    - verifies the tag matches `manifest.json` version,
    - runs lint and build,
    - signs with `web-ext sign --channel=unlisted` if AMO secrets are configured,
-   - creates a GitHub Release and attaches the `.xpi`.
+   - creates a GitHub Release and attaches the signed `.xpi` as `github_html_preview-<version>.xpi` (falls back to a `-unsigned` variant if signing didn't run).
 
 ### AMO signing (optional, required for install on stock Firefox)
 1. Generate a JWT issuer / secret at https://addons.mozilla.org/developers/addon/api/key/.
@@ -64,10 +64,9 @@ TypeScript source lives in `src/`, static assets (`manifest.json`, `content.css`
 
 ```
 src/
-└── content.ts        # URL check → button injection → fetch + iframe render
+└── content.ts        # URL check → button injection → fetch + blob URL + window.open
 public/
 ├── manifest.json     # MV3, content_scripts on github.com/*/blob/*
-├── content.css       # Preview button / iframe styling
 └── icons/icon-48.png, icon-96.png
 scripts/
 └── sync-manifest-version.mjs  # mirrors package.json version into manifest
@@ -81,23 +80,27 @@ web-ext-config.mjs    # sourceDir: "build", artifactsDir: "dist"
 └── release.yml       # tag push: build + sign + release
 ```
 
+## How it works
+
+On every HTML blob page, the content script locates the "Add to space" button (a Primer IconButton wrapping an `octicon-space` SVG) and inserts a Preview link to its left. The link's class names are deep-cloned from the existing "Raw" link button so the styling stays in lockstep with whatever Primer ships.
+
+Clicking Preview:
+1. Constructs `https://github.com/{owner}/{repo}/raw/{branch}/{path}`.
+2. `fetch`es it with `credentials: "same-origin"` — the github.com session cookie authenticates the request, github.com 302-redirects to a short-lived signed `raw.githubusercontent.com` URL whose `?token=` carries the authorization, and the browser follows the redirect to retrieve the file body.
+3. Injects `<base href="...">` into the HTML so relative resources (`./style.css`, `<img src="logo.png">`) resolve against the file's raw directory.
+4. Wraps the result in a `Blob` of `type: "text/html"` and `window.open`s the resulting `blob:` URL in a new tab.
+
+## Why a new tab (and not an inline iframe)
+
+GitHub's response sends `Content-Security-Policy: script-src https://github.githubassets.com`. Any iframe rendered inside the github.com document inherits that CSP — including `srcdoc`, `blob:`, and `data:` iframes — so HTML files that load CDN scripts (Chart.js, Mermaid, etc.) were silently broken when previewed in-place. A new top-level tab loaded from a `blob:` URL is not embedded in github.com and so has no inherited CSP; external scripts run normally.
+
 ## Private repo support
 
-Supported. As long as the user is logged into GitHub in the same browser, the preview works for private repositories.
-
-How it works: the extension fetches `https://github.com/{owner}/{repo}/raw/{branch}/{path}` with `credentials: "include"`. GitHub authenticates the request via the session cookie, then 302-redirects to a short-lived signed URL on `raw.githubusercontent.com`. `fetch` follows the redirect and returns the file body.
-
-## Security model
-
-The iframe is created with `sandbox="allow-scripts"`. `allow-same-origin` is intentionally omitted, so the frame runs in an **opaque origin**:
-- Scripts in the iframe cannot reach the parent github.com page's DOM, cookies, or storage.
-- Form submission, popups, and top-level navigation from inside the frame are blocked.
-
-Relative resources (`./style.css`, `<img src="logo.png">`, etc.) are resolved by injecting a `<base href="...">` tag into the fetched HTML's `<head>`, pointing at the directory of the file's raw URL so same-repo assets load correctly.
+Supported. The `credentials: "same-origin"` fetch sends the github.com session cookie on the initial request; github.com then issues a signed redirect that carries the authorization onward. Relative resources inside the previewed HTML route back through `github.com/.../raw/` via the injected `<base>`, so they reuse the same cookie-then-redirect path.
 
 ## Out of scope
 
 - Preview on PR diff / commit diff / Gist views.
 - Additional extensions like `.svg` or `.md` (GitHub already renders these).
-- An options page (e.g., toggling the sandbox policy).
+- An options page.
 - Chrome / Edge builds.
