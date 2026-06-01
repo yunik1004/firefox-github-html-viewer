@@ -40,10 +40,13 @@ jobs:
 
       - name: Sign with Mozilla AMO (unlisted, self-distribution)
         if: ${{ env.WEB_EXT_API_KEY != '' && env.WEB_EXT_API_SECRET != '' }}
+        continue-on-error: true
         env:
+          # web-ext reads these env vars natively; passing them as CLI args
+          # adds an extra shell-quoting step where whitespace can sneak in.
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: npm run sign -- --api-key="$WEB_EXT_API_KEY" --api-secret="$WEB_EXT_API_SECRET"
+        run: npm run sign
 
       - name: Collect release artifacts
         run: |
