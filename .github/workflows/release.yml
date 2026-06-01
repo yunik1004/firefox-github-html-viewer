@@ -54,17 +54,16 @@ jobs:
           VERSION="$(node -p "require('./public/manifest.json').version")"
           BASE="github_html_preview-${VERSION}"
 
-          # Prefer the AMO-signed .xpi from `web-ext sign` (which lands in
-          # dist/ with a GUID-prefixed filename) and rename it to our own
-          # convention. Fall back to the unsigned .zip from `web-ext build`
-          # only if signing didn't run, tagging it -unsigned so it's clear.
+          # Always include the unsigned .xpi from `web-ext build` (tagged
+          # -unsigned so it can be distinguished from the signed variant).
+          UNSIGNED="$(ls dist/*.zip 2>/dev/null | head -1)"
+          [ -n "$UNSIGNED" ] && cp "$UNSIGNED" "release/${BASE}-unsigned.xpi"
+
+          # If `web-ext sign` produced a signed .xpi (AMO returns it with a
+          # GUID-prefixed filename), rename it to our convention as well.
           SIGNED="$(ls dist/*.xpi 2>/dev/null | head -1)"
-          if [ -n "$SIGNED" ]; then
-            cp "$SIGNED" "release/${BASE}.xpi"
-          else
-            UNSIGNED="$(ls dist/*.zip 2>/dev/null | head -1)"
-            [ -n "$UNSIGNED" ] && cp "$UNSIGNED" "release/${BASE}-unsigned.xpi"
-          fi
+          [ -n "$SIGNED" ] && cp "$SIGNED" "release/${BASE}.xpi"
+
           ls -la release/
 
       - name: Create GitHub Release
