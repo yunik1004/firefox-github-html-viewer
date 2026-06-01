@@ -42,29 +42,35 @@ function dirHref(url: string): string {
 // GitHub DOM selectors
 // ---------------------------------------------------------------------------
 
-// Find the Code/Blame segmented toggle on a blob page. GitHub has shipped
-// several variants of this UI (anchors with stable testids, then buttons
-// without), so we look up the pair by visible label instead and pick the
-// Code/Blame pair that shares a parent. Blame is returned when available so
-// Preview sits at the right end of the segmented group.
-function findInsertionPoint(): HTMLElement | null {
-  const labelled = (label: string) =>
-    Array.from(
-      document.querySelectorAll<HTMLElement>("button, a"),
-    ).filter((el) => el.textContent?.trim() === label);
+// GitHub renders mobile and desktop layout variants of the file header
+// side-by-side in the DOM and hides the inactive one via CSS, so we filter
+// to visible candidates first.
+function isVisible(el: HTMLElement): boolean {
+  if (el.offsetParent === null) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
 
-  const codes = labelled("Code");
-  const blames = labelled("Blame");
-  for (const blame of blames) {
-    for (const code of codes) {
-      if (blame.parentElement === code.parentElement) return blame;
-    }
+// Find the Blame button that lives inside the Primer SegmentedControl
+// (Code | Blame toggle) on a blob page. Used both as the insertion anchor
+// and as a style template for the Preview button.
+function findInsertionPoint(): HTMLButtonElement | null {
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLButtonElement>("button"),
+  )
+    .filter((el) => el.textContent?.trim() === "Blame")
+    .filter(isVisible);
+
+  for (const blame of candidates) {
+    if (blame.closest("ul[class*='SegmentedControl']")) return blame;
   }
-  return blames[0] ?? codes[0] ?? null;
+  return candidates[0] ?? null;
 }
 
 function findBlobContentContainer(): HTMLElement | null {
   const selectors = [
+    "[data-hpc]", // current GitHub viewer (react-code-file-contents)
+    ".react-code-lines",
     '[data-testid="blob-viewer-file-content"]',
     ".react-blob-view-content",
     '[itemprop="text"]',
@@ -110,9 +116,26 @@ interface PreviewState {
   container: HTMLElement;
   frame: HTMLIFrameElement;
   originalDisplay: string;
+  prevActive: HTMLElement | null;
 }
 
 let preview: PreviewState | null = null;
+
+// Apply Primer SegmentedControl's active-segment markers to a button:
+//   aria-current="true"|"false" on the button,
+//   --separator-color CSS var on the button (transparent when active),
+//   data-selected on the parent <li> when active.
+function setSegmentActive(button: HTMLElement, active: boolean): void {
+  button.setAttribute("aria-current", active ? "true" : "false");
+  button.style.setProperty(
+    "--separator-color",
+    active ? "transparent" : "var(--borderColor-default)",
+  );
+  const li = button.parentElement;
+  if (!li) return;
+  if (active) li.setAttribute("data-selected", "");
+  else li.removeAttribute("data-selected");
+}
 
 async function showPreview(button: HTMLButtonElement): Promise<void> {
   if (preview) return;
@@ -128,18 +151,25 @@ async function showPreview(button: HTMLButtonElement): Promise<void> {
   frame.className = FRAME_CLASS;
   frame.setAttribute("sandbox", "allow-scripts");
 
+  // The currently-selected segment (Code on /blob/, Blame on /blame/).
+  // We park its active state on the Preview tab while we render.
+  const ul = button.closest("ul[class*='SegmentedControl']");
+  const prevActive =
+    (ul?.querySelector<HTMLElement>('button[aria-current="true"]') ?? null);
+
   const state: PreviewState = {
     button,
     container,
     frame,
     originalDisplay: container.style.display,
+    prevActive: prevActive !== button ? prevActive : null,
   };
   container.style.display = "none";
   container.parentNode.insertBefore(frame, container);
   preview = state;
 
-  button.setAttribute("aria-pressed", "true");
-  button.textContent = "Code";
+  if (state.prevActive) setSegmentActive(state.prevActive, false);
+  setSegmentActive(button, true);
 
   const response = await fetch(rawUrl, { credentials: "include" });
   // The user may have toggled off or navigated away while the fetch was
@@ -157,11 +187,11 @@ async function showPreview(button: HTMLButtonElement): Promise<void> {
 
 function hidePreview(): void {
   if (!preview) return;
-  const { button, container, frame, originalDisplay } = preview;
+  const { button, container, frame, originalDisplay, prevActive } = preview;
   frame.remove();
   container.style.display = originalDisplay;
-  button.setAttribute("aria-pressed", "false");
-  button.textContent = "Preview";
+  setSegmentActive(button, false);
+  if (prevActive) setSegmentActive(prevActive, true);
   preview = null;
 }
 
@@ -176,20 +206,46 @@ function togglePreview(event: Event): void {
 // ---------------------------------------------------------------------------
 
 function createPreviewButton(template: HTMLElement): HTMLButtonElement {
+  // Deep-clone the existing segment button so we inherit Primer's nested
+  // <span>/<div> wrappers, hashed CSS module classes, hover/active styles,
+  // and the data-text width-reserving trick. Then rewrite the label.
+  if (template instanceof HTMLButtonElement) {
+    const btn = template.cloneNode(true) as HTMLButtonElement;
+    btn.id = BUTTON_ID;
+    btn.removeAttribute("aria-pressed");
+
+    const textEl = btn.querySelector<HTMLElement>("[data-text]");
+    if (textEl) {
+      textEl.setAttribute("data-text", "Preview");
+      textEl.textContent = "Preview";
+    } else {
+      btn.textContent = "Preview";
+    }
+
+    // Always start in the inactive segment state.
+    setSegmentActive(btn, false);
+    btn.addEventListener("click", togglePreview);
+    return btn;
+  }
+
+  // Fallback path: no Primer template available, build a plain button.
   const btn = document.createElement("button");
   btn.id = BUTTON_ID;
   btn.type = "button";
   btn.textContent = "Preview";
-  btn.setAttribute("aria-pressed", "false");
-  btn.className = template.className || FALLBACK_BUTTON_CLASS;
+  btn.className = FALLBACK_BUTTON_CLASS;
   btn.classList.add(BUTTON_CLASS);
+  setSegmentActive(btn, false);
   btn.addEventListener("click", togglePreview);
   return btn;
 }
 
+const WRAPPER_ATTR = "data-ghp-wrapper";
+
 function teardown(): void {
   if (preview) hidePreview();
   document.getElementById(BUTTON_ID)?.remove();
+  document.querySelector(`[${WRAPPER_ATTR}]`)?.remove();
 }
 
 function setup(): void {
@@ -200,10 +256,40 @@ function setup(): void {
   if (document.getElementById(BUTTON_ID)) return;
 
   const insertionPoint = findInsertionPoint();
-  if (!insertionPoint?.parentNode) return;
+  if (!insertionPoint) return;
 
   const button = createPreviewButton(insertionPoint);
-  insertionPoint.parentNode.insertBefore(button, insertionPoint.nextSibling);
+
+  // If Blame sits in a Primer SegmentedControl LI, add Preview as a new LI
+  // sibling so the segmented look (Code | Blame | Preview) is preserved.
+  const li = insertionPoint.parentElement;
+  const ul = li?.parentElement;
+  if (li?.tagName === "LI" && ul?.tagName === "UL") {
+    const wrapper = document.createElement("li");
+    wrapper.className = li.className;
+    wrapper.setAttribute(WRAPPER_ATTR, "1");
+    wrapper.appendChild(button);
+    ul.appendChild(wrapper);
+
+    // When the user clicks Code or Blame while Preview is active, treat it
+    // as "leave preview" so the segmented control stays mutually exclusive.
+    // Blame additionally navigates away; the nav watcher tears down then.
+    if (!ul.hasAttribute("data-ghp-listening")) {
+      ul.setAttribute("data-ghp-listening", "1");
+      ul.addEventListener("click", (event) => {
+        if (!preview) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest(`#${BUTTON_ID}`)) {
+          return;
+        }
+        hidePreview();
+      });
+    }
+    return;
+  }
+
+  // Fallback: insert as a direct sibling right after the anchor element.
+  insertionPoint.parentNode?.insertBefore(button, insertionPoint.nextSibling);
 }
 
 // ---------------------------------------------------------------------------
