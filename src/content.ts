@@ -42,17 +42,25 @@ function dirHref(url: string): string {
 // GitHub DOM selectors
 // ---------------------------------------------------------------------------
 
-// The Preview button is inserted right after this anchor. Blame is preferred
-// so Preview sits at the right end of the Code | Blame segmented group.
-function findInsertionAnchor(): HTMLAnchorElement | null {
-  return (
-    document.querySelector<HTMLAnchorElement>(
-      'a[data-testid="blob-blame-button"]',
-    ) ??
-    document.querySelector<HTMLAnchorElement>(
-      'a[data-testid="blob-code-button"]',
-    )
-  );
+// Find the Code/Blame segmented toggle on a blob page. GitHub has shipped
+// several variants of this UI (anchors with stable testids, then buttons
+// without), so we look up the pair by visible label instead and pick the
+// Code/Blame pair that shares a parent. Blame is returned when available so
+// Preview sits at the right end of the segmented group.
+function findInsertionPoint(): HTMLElement | null {
+  const labelled = (label: string) =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>("button, a"),
+    ).filter((el) => el.textContent?.trim() === label);
+
+  const codes = labelled("Code");
+  const blames = labelled("Blame");
+  for (const blame of blames) {
+    for (const code of codes) {
+      if (blame.parentElement === code.parentElement) return blame;
+    }
+  }
+  return blames[0] ?? codes[0] ?? null;
 }
 
 function findBlobContentContainer(): HTMLElement | null {
@@ -191,11 +199,11 @@ function setup(): void {
   }
   if (document.getElementById(BUTTON_ID)) return;
 
-  const anchor = findInsertionAnchor();
-  if (!anchor?.parentNode) return;
+  const insertionPoint = findInsertionPoint();
+  if (!insertionPoint?.parentNode) return;
 
-  const button = createPreviewButton(anchor);
-  anchor.parentNode.insertBefore(button, anchor.nextSibling);
+  const button = createPreviewButton(insertionPoint);
+  insertionPoint.parentNode.insertBefore(button, insertionPoint.nextSibling);
 }
 
 // ---------------------------------------------------------------------------
