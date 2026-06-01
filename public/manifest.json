@@ -5,8 +5,8 @@
   "description": "Adds a Preview button to GitHub HTML blob pages that opens the rendered file in a new tab.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "firefox-github-html-viewer@yunik1004",
-      "strict_min_version": "140.0",
+      "id": "github-html-preview@inkyupark",
+      "strict_min_version": "142.0",
       "data_collection_permissions": {
         "required": [
           "none"
