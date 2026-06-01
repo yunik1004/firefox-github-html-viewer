@@ -171,7 +171,14 @@ async function showPreview(button: HTMLButtonElement): Promise<void> {
   if (state.prevActive) setSegmentActive(state.prevActive, false);
   setSegmentActive(button, true);
 
-  const response = await fetch(rawUrl, { credentials: "include" });
+  // credentials: "same-origin" (the default) sends the github.com session
+  // cookie on the initial same-origin request to /raw/, which is enough for
+  // private repo auth — github.com then 302-redirects to a signed
+  // raw.githubusercontent.com URL whose ?token= query parameter carries the
+  // authorization. Using "include" here would also try to send credentials
+  // on the cross-origin step, which Firefox blocks when the response uses
+  // Access-Control-Allow-Origin: *.
+  const response = await fetch(rawUrl, { credentials: "same-origin" });
   // The user may have toggled off or navigated away while the fetch was
   // pending. Bail out silently if our frame is no longer the active one.
   if (preview !== state) return;
