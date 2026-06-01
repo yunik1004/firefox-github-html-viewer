@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify manifest version matches tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(node -p "require('./public/manifest.json').version")"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match manifest.json version ($MANIFEST_VERSION)" >&2
+            exit 1
+          fi
+
+      - name: Lint extension
+        run: npm run lint
+
+      - name: Build unsigned .xpi
+        run: npm run build
+
+      - name: Sign with Mozilla AMO (unlisted, self-distribution)
+        if: ${{ env.WEB_EXT_API_KEY != '' && env.WEB_EXT_API_SECRET != '' }}
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: npm run sign -- --api-key="$WEB_EXT_API_KEY" --api-secret="$WEB_EXT_API_SECRET"
+
+      - name: Collect release artifacts
+        run: |
+          mkdir -p release
+          for f in dist/*.zip; do
+            [ -e "$f" ] || continue
+            base="$(basename "$f" .zip)"
+            cp "$f" "release/${base}.xpi"
+          done
+          # web-ext sign writes the signed .xpi directly into dist/
+          for f in dist/*.xpi; do
+            [ -e "$f" ] || continue
+            cp "$f" "release/$(basename "$f")"
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.xpi
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Upload artifact (manual runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-release
+          path: release/*.xpi
+          if-no-files-found: error

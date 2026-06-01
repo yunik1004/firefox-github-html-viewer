@@ -1,0 +1,25 @@
+{
+  "name": "firefox-github-html-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Firefox extension that adds a Preview button to GitHub HTML blob pages.",
+  "scripts": {
+    "clean": "rm -rf build dist",
+    "typecheck": "tsc --noEmit",
+    "prepare-build": "npm run clean && tsc && cp -R public/. build/",
+    "start": "npm run prepare-build && concurrently -k -n tsc,run -c blue,green \"tsc --watch --preserveWatchOutput\" \"web-ext run\"",
+    "lint": "npm run prepare-build && web-ext lint --warnings-as-errors",
+    "build": "npm run prepare-build && web-ext build",
+    "sign": "npm run prepare-build && web-ext sign --channel=unlisted",
+    "ci": "npm run typecheck && npm run lint && npm run build",
+    "version": "node scripts/sync-manifest-version.mjs && git add public/manifest.json"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.5.0",
+    "web-ext": "^8.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
