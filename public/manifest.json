@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "GitHub HTML Preview",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Adds a Preview button next to Code/Blame on GitHub blob pages to render HTML files inline.",
   "browser_specific_settings": {
     "gecko": {
       "id": "github-html-preview@inkyupark",
       "strict_min_version": "115.0",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
@@ -18,9 +20,15 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://github.com/*/blob/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "*://github.com/*/blob/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],
