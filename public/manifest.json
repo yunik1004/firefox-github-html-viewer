@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GitHub HTML Preview",
   "version": "0.1.4",
-  "description": "Adds a Preview button next to Code/Blame on GitHub blob pages to render HTML files inline.",
+  "description": "Adds a Preview button to GitHub HTML blob pages that opens the rendered file in a new tab.",
   "browser_specific_settings": {
     "gecko": {
       "id": "github-html-preview@inkyupark",
@@ -25,9 +25,6 @@
       ],
       "js": [
         "content.js"
-      ],
-      "css": [
-        "content.css"
       ],
       "run_at": "document_idle"
     }

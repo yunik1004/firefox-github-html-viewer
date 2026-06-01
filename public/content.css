@@ -1,8 +1,0 @@
-.ghp-preview-frame {
-  width: 100%;
-  min-height: 70vh;
-  border: 1px solid var(--borderColor-default, var(--color-border-default, #d0d7de));
-  background: var(--bgColor-default, var(--color-canvas-default, #ffffff));
-  border-radius: 6px;
-  display: block;
-}
