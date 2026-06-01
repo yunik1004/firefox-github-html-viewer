@@ -1,6 +1,6 @@
 {
   "name": "firefox-github-html-viewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Firefox extension that adds a Preview button to GitHub HTML blob pages.",
   "scripts": {
