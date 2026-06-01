@@ -12,11 +12,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
@@ -38,6 +37,11 @@ jobs:
       - name: Build unsigned .xpi
         run: npm run build
 
+      - name: Preserve unsigned artifact
+        # `npm run sign` re-runs prepare-build which wipes dist/, so stash
+        # the unsigned .zip outside dist/ before signing can clobber it.
+        run: mkdir -p unsigned && cp dist/*.zip unsigned/
+
       - name: Sign with Mozilla AMO (unlisted, self-distribution)
         if: ${{ env.WEB_EXT_API_KEY != '' && env.WEB_EXT_API_SECRET != '' }}
         continue-on-error: true
@@ -56,7 +60,8 @@ jobs:
 
           # Always include the unsigned .xpi from `web-ext build` (tagged
           # -unsigned so it can be distinguished from the signed variant).
-          UNSIGNED="$(ls dist/*.zip 2>/dev/null | head -1)"
+          # Picked up from the stash made before the sign step ran.
+          UNSIGNED="$(ls unsigned/*.zip 2>/dev/null | head -1)"
           [ -n "$UNSIGNED" ] && cp "$UNSIGNED" "release/${BASE}-unsigned.xpi"
 
           # If `web-ext sign` produced a signed .xpi (AMO returns it with a
@@ -76,7 +81,7 @@ jobs:
 
       - name: Upload artifact (manual runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: extension-release
           path: release/*.xpi
