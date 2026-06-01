@@ -51,16 +51,20 @@ jobs:
       - name: Collect release artifacts
         run: |
           mkdir -p release
-          for f in dist/*.zip; do
-            [ -e "$f" ] || continue
-            base="$(basename "$f" .zip)"
-            cp "$f" "release/${base}.xpi"
-          done
-          # web-ext sign writes the signed .xpi directly into dist/
-          for f in dist/*.xpi; do
-            [ -e "$f" ] || continue
-            cp "$f" "release/$(basename "$f")"
-          done
+          VERSION="$(node -p "require('./public/manifest.json').version")"
+          BASE="github_html_preview-${VERSION}"
+
+          # Prefer the AMO-signed .xpi from `web-ext sign` (which lands in
+          # dist/ with a GUID-prefixed filename) and rename it to our own
+          # convention. Fall back to the unsigned .zip from `web-ext build`
+          # only if signing didn't run, tagging it -unsigned so it's clear.
+          SIGNED="$(ls dist/*.xpi 2>/dev/null | head -1)"
+          if [ -n "$SIGNED" ]; then
+            cp "$SIGNED" "release/${BASE}.xpi"
+          else
+            UNSIGNED="$(ls dist/*.zip 2>/dev/null | head -1)"
+            [ -n "$UNSIGNED" ] && cp "$UNSIGNED" "release/${BASE}-unsigned.xpi"
+          fi
           ls -la release/
 
       - name: Create GitHub Release
