@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GitHub HTML Preview",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Adds a Preview button next to Code/Blame on GitHub blob pages to render HTML files inline.",
   "browser_specific_settings": {
     "gecko": {
