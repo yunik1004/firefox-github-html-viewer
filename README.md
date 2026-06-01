@@ -68,7 +68,7 @@ src/
 public/
 ├── manifest.json     # MV3, content_scripts on github.com/*/blob/*
 ├── content.css       # Preview button / iframe styling
-└── icons/icon.svg
+└── icons/icon-48.png, icon-96.png
 scripts/
 └── sync-manifest-version.mjs  # mirrors package.json version into manifest
 build/                # generated: tsc output + copied public/ assets (gitignored)
