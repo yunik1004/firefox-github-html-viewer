@@ -2,6 +2,7 @@
   "name": "firefox-github-html-viewer",
   "version": "0.1.9",
   "private": true,
+  "license": "MIT",
   "description": "Firefox extension that adds a Preview button to GitHub HTML blob pages.",
   "scripts": {
     "clean": "rm -rf build dist",
